@@ -1,0 +1,663 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <!-- Basic HTML5 setup: character set, viewport for responsiveness, and the page title. -->
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fridge Feast</title>
+
+    <!-- The application's favicon, an embedded SVG for a chef's hat. -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23fbbf24'%3E%3Cpath d='M12 2.5c-2.4 0-4.7.9-6.5 2.6-.4.3-.6.7-.6 1.2 0 .5.2 1 .6 1.3l.3.3c.4.3.9.5 1.4.5s1-.2 1.4-.5c1.1-.9 2.5-1.5 4-1.5s2.9.6 4 1.5c.8.6 1.9.6 2.7 0l.3-.3c.4-.3.6-.8.6-1.3s-.2-.9-.6-1.2C16.7 3.4 14.4 2.5 12 2.5zM4.3 8.3c-.4-.4-.9-.6-1.4-.6-1.1 0-2 .9-2 2s.9 2 2 2c.5 0 1-.2 1.4-.6.9-1 2.3-1.6 3.7-1.6s2.8.6 3.7 1.6c.8.7 2 .7 2.8 0 .9-1 2.3-1.6 3.7-1.6s2.8.6 3.7 1.6c.4.4.9.6 1.4.6 1.1 0 2-.9 2-2s-.9-2-2-2c-.5 0-1 .2-1.4.6-.9 1-2.3 1.6-3.7 1.6s-2.8-.6-3.7-1.6c-.8-.7-2-.7-2.8 0-.9 1-2.3 1.6-3.7 1.6s-2.8-.6-3.7-1.6zM22 14.5v-1c0-1.1-.9-2-2-2h-2c0-1.1-.9-2-2-2h-8c-1.1 0-2 .9-2 2H4c-1.1 0-2 .9-2 2v1c0 3.6 2.9 6.5 6.5 6.5h7c3.6 0 6.5-2.9 6.5-6.5z'/%3E%3C/svg%3E">
+    
+    <!-- Using Tailwind CSS via CDN for rapid, utility-first styling. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Embedded CSS for custom styles and animations not covered by standard Tailwind utilities. -->
+    <style>
+      /* For custom scrollbar aesthetics in dark mode */
+      ::-webkit-scrollbar { width: 8px; }
+      ::-webkit-scrollbar-track { background: #0f172a; }
+      ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+      ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+
+      /* Dynamic gradient background animation */
+      @keyframes gradientAnimation {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+      }
+      .animated-gradient {
+        background: linear-gradient(-45deg, #0f172a, #1e293b, #334155, #1e293b);
+        background-size: 400% 400%;
+        animation: gradientAnimation 15s ease infinite;
+      }
+
+      /* Simple fade-in animation for newly added elements like ingredient tags. */
+      @keyframes fadeIn {
+        from { opacity: 0; transform: scale(0.95); }
+        to { opacity: 1; transform: scale(1); }
+      }
+      .fade-in { animation: fadeIn 0.3s ease-out forwards; }
+      
+      /* A more complex animation for recipe cards to make them appear gracefully. */
+      @keyframes slideUpFadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .recipe-card-enter {
+        animation: slideUpFadeIn 0.6s ease-out forwards;
+        opacity: 0; /* Start hidden to prevent flash of unstyled content */
+      }
+
+      /* A fast, subtle animation for the modal popup. */
+      @keyframes slideUpFadeInFast {
+        from { opacity: 0; transform: translateY(10px) scale(0.98); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      .slide-up-fade-in-fast { animation: slideUpFadeInFast 0.3s ease-out forwards; }
+
+      /* Skeleton loader for image placeholders, giving a sense of progress. */
+      @keyframes pulse { 50% { opacity: .5; } }
+      .skeleton-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    </style>
+    
+    <!-- Import Map: Defines aliases for ES module imports. This allows using bare specifiers
+         like "react" or "@google/genai" and having the browser fetch them from a CDN.
+         This is key to having a modern, module-based app without a build step. -->
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "@google/genai": "https://esm.sh/@google/genai@^1.14.0"
+      }
+    }
+    </script>
+  <link rel="stylesheet" href="/index.css">
+</head>
+  <body class="animated-gradient">
+    <!-- The root DOM element where the React application will be mounted. -->
+    <div id="root"></div>
+    
+    <!-- The main application script. 'type="module"' enables modern JavaScript features like import/export. -->
+    <script type="module">
+import React, { useState, useCallback, useEffect } from 'react';
+import ReactDOM from 'react-dom/client';
+import { GoogleGenAI, Type } from "@google/genai";
+
+/**
+ * @file Fridge Feast - A Single-File React Application
+ *
+ * @description
+ * This file contains the entire application logic for Fridge Feast.
+ * It's built using React but without JSX, meaning `React.createElement`
+ * (aliased as `h`) is used directly. This approach allows the entire app to
+ * be self-contained in a single HTML file without requiring a build step,
+ * making it highly portable and easy to run.
+ *
+ * @section Architecture
+ * The app is structured functionally:
+ * 1. Global Setup: Imports, API key handling, and AI client initialization.
+ * 2. Gemini API Service: A set of async functions to communicate with the Google AI API.
+ * 3. React Components: A collection of functional components that constitute the UI.
+ * 4. Main App Component: The root component managing state and orchestrating the UI.
+ * 5. App Rendering: The final lines that mount the App component to the DOM.
+ */
+
+// Shorthand for React.createElement. This is a common convention in projects
+// that use React without JSX to keep the code more concise and readable.
+const h = React.createElement;
+
+// --- API KEY HANDLING & GEMINI API SERVICE ---
+
+// The AI client instance. It is declared globally here but will be initialized by the
+// App component after the user provides a valid API key.
+let ai;
+
+/**
+ * Defines the expected JSON schema for recipe generation.
+ * This structured format is crucial for reliably parsing the AI's response.
+ * @type {object}
+ */
+const recipeSchema = {
+    type: Type.ARRAY,
+    items: {
+      type: Type.OBJECT,
+      properties: {
+        name: { type: Type.STRING },
+        description: { type: Type.STRING },
+        ingredients: { type: Type.ARRAY, items: { type: Type.STRING } },
+        instructions: { type: Type.ARRAY, items: { type: Type.STRING } },
+      },
+      required: ["name", "description", "ingredients", "instructions"],
+    },
+};
+
+/**
+ * Generates recipe suggestions from a list of ingredients using the Gemini API.
+ * @param {string[]} ingredients - An array of ingredient strings.
+ * @returns {Promise<object[]>} A promise that resolves to an array of recipe objects.
+ * @throws Will throw an error if the API call fails or parsing is unsuccessful.
+ */
+const getRecipesFromIngredients = async (ingredients) => {
+    if (!ai) throw new Error("Gemini AI client not initialized. Please set your API key.");
+    try {
+        const prompt = `You are an expert chef specializing in creating nutritious and delicious meals from leftover ingredients. Given the following ingredients: ${ingredients.join(', ')}, suggest 2-3 fully-fledged meal recipes. For each recipe, provide a name, a short description, a list of required ingredients (including the ones provided), and step-by-step instructions.`;
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: recipeSchema,
+            },
+        });
+        const jsonText = response.text.trim();
+        return JSON.parse(jsonText);
+    } catch (error) {
+        console.error("Error fetching recipes from Gemini API:", error);
+        throw new Error("Failed to generate recipes.");
+    }
+};
+
+/**
+ * Generates a random list of complementary ingredients.
+ * @returns {Promise<string[]>} A promise that resolves to an array of ingredient strings.
+ */
+const getRandomIngredients = async () => {
+    if (!ai) throw new Error("Gemini AI client not initialized.");
+    try {
+        const prompt = `You are a creative pantry assistant. Generate a random, but complementary, list of 3 common household ingredients that could be used to make an interesting meal. The list must contain exactly one protein (e.g., chicken, beef, tofu, eggs, beans) and exactly one vegetable (e.g., broccoli, carrots, bell peppers, spinach). The third ingredient can be anything that complements the other two. Provide the list as a simple JSON array of strings in lowercase.`;
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                },
+            },
+        });
+        const jsonText = response.text.trim();
+        return JSON.parse(jsonText);
+    } catch (error) {
+        console.error("Error fetching random ingredients from Gemini API:", error);
+        throw new Error("Failed to generate random ingredients.");
+    }
+};
+
+/**
+ * Generates professional prep tips for a given recipe.
+ * @param {object} recipe - A recipe object.
+ * @returns {Promise<string>} A promise that resolves to a string of prep tips.
+ */
+const getPrepTips = async (recipe) => {
+    if (!ai) throw new Error("Gemini AI client not initialized.");
+    try {
+        const prompt = `You are an expert culinary advisor. For the recipe "${recipe.name}", provide 3-5 actionable and insightful preparation tips. Focus on techniques that a home cook can use to improve the final dish, such as knife skills for specific ingredients, how to achieve the best texture, or simple plating suggestions. Format the response as a simple list.`;
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+        });
+        return response.text;
+    } catch (error) {
+        console.error("Error fetching prep tips from Gemini API:", error);
+        throw new Error("Failed to generate prep tips.");
+    }
+};
+
+/**
+ * Generates an image for a given dish using the Imagen API.
+ * This provides a unique, AI-generated image based on the recipe's name.
+ * @param {object} recipe - The recipe object containing the name.
+ * @returns {Promise<string>} A promise that resolves to a base64 data URL for the generated image.
+ */
+const generateDishImage = async (recipe) => {
+    if (!ai) throw new Error("Gemini AI client not initialized.");
+    try {
+        const prompt = `A high-quality, professional photograph of ${recipe.name}, beautifully plated and ready to eat. The image should look delicious and inviting.`;
+
+        const response = await ai.models.generateImages({
+            model: 'imagen-3.0-generate-002',
+            prompt: prompt,
+            config: {
+              numberOfImages: 1,
+              outputMimeType: 'image/jpeg',
+              aspectRatio: '1:1',
+            },
+        });
+
+        const base64ImageBytes = response.generatedImages[0].image.imageBytes;
+        return `data:image/jpeg;base64,${base64ImageBytes}`;
+    } catch (error) {
+        console.error("Error generating image with Imagen:", error);
+        throw new Error("Failed to generate dish image.");
+    }
+};
+
+
+// --- UI COMPONENTS ---
+
+/**
+ * A modal component to ask the user for their Gemini API key.
+ * This is the first thing a new user sees.
+ * @param {object} props - Component props.
+ * @param {Function} props.onSave - Callback function to save the provided key in the parent component.
+ */
+const ApiKeyModal = ({ onSave }) => {
+    // Local state to hold the value of the input field.
+    const [localKey, setLocalKey] = useState('');
+
+    const handleSave = () => {
+        if (localKey.trim()) {
+            onSave(localKey.trim());
+        }
+    };
+    
+    // Allows submitting the key by pressing the Enter key.
+    const handleKeyDown = (event) => {
+      if (event.key === 'Enter') {
+          event.preventDefault();
+          handleSave();
+      }
+    };
+
+    // The modal's UI, built with `h` (React.createElement).
+    return h("div", { className: "fixed inset-0 bg-gray-900 bg-opacity-80 backdrop-blur-sm flex items-center justify-center z-50 p-4", role: "dialog", "aria-modal": "true" },
+        h("div", { className: "bg-gray-800 rounded-2xl shadow-2xl p-8 max-w-lg w-full border border-gray-700 fade-in" },
+            h("h2", { className: "text-2xl font-bold text-amber-400 mb-4" }, "Enter Your Gemini API Key"),
+            h("p", { className: "text-gray-400 mb-2" }, "To use Fridge Feast, please provide your Google Gemini API key. Your key is stored only in your browser and is never shared."),
+            h("a", { href: "https://aistudio.google.com/app/apikey", target: "_blank", rel: "noopener noreferrer", className: "text-amber-500 hover:underline mb-6 block text-sm" }, "Get a free API Key from Google AI Studio"),
+            h("div", { className: "space-y-4" },
+                h("input", {
+                    type: "password",
+                    value: localKey,
+                    onChange: (e) => setLocalKey(e.target.value),
+                    onKeyDown: handleKeyDown,
+                    placeholder: "Paste your API key here",
+                    className: "w-full p-3 border border-gray-600 bg-gray-700 text-gray-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none transition-all",
+                    "aria-label": "Gemini API Key Input"
+                }),
+                h("button", {
+                    onClick: handleSave,
+                    className: "w-full px-8 py-4 bg-green-600 text-white font-bold text-lg rounded-lg hover:bg-green-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-green-500 transition-all transform hover:scale-105 disabled:bg-gray-500 disabled:cursor-not-allowed",
+                    disabled: !localKey.trim()
+                }, "Save & Start Cooking")
+            )
+        )
+    );
+};
+
+/**
+ * A reusable modal for displaying AI-generated content like tips or images.
+ */
+const Modal = ({ title, content, imageUrl, onClose, isLoading, error }) => {
+    useEffect(() => {
+        const handleKeyDown = (event) => {
+            if (event.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [onClose]);
+
+    const formattedContent = content && content.split('\n').map((line, i) => h("p", { key: i, className: "mb-2" }, line));
+
+    return h("div", {
+        className: "fixed inset-0 bg-gray-900 bg-opacity-80 backdrop-blur-sm flex items-center justify-center z-50 p-4 fade-in",
+        onClick: onClose,
+        role: "dialog", "aria-modal": "true", "aria-labelledby": "modal-title"
+    }, h("div", {
+        className: "bg-gray-800 rounded-2xl shadow-2xl p-8 max-w-2xl w-full border border-gray-700 slide-up-fade-in-fast relative",
+        onClick: (e) => e.stopPropagation()
+    }, h("button", {
+        onClick: onClose,
+        className: "absolute top-4 right-4 text-gray-400 hover:text-white transition-colors",
+        "aria-label": "Close modal"
+    }, h("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor" }, h("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M6 18L18 6M6 6l12 12" }))), h("h2", { id: "modal-title", className: "text-2xl font-bold text-amber-400 mb-6" }, title), h("div", { className: "text-gray-300 max-h-[60vh] overflow-y-auto pr-4" }, isLoading && h("div", { className: "flex justify-center items-center py-10" }, h(Loader)), error && h("p", { className: "text-red-400" }, error), !isLoading && !error && (imageUrl ? h("img", { src: imageUrl, alt: title, className: "w-full h-auto rounded-lg shadow-lg" }) : formattedContent))));
+};
+
+
+/**
+ * A reusable spinning loader component to indicate loading states.
+ * Uses SVG and Tailwind CSS for animation.
+ */
+const Loader = () => {
+  return h("svg", { className: "animate-spin h-10 w-10 text-amber-500", xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24" },
+    h("circle", { className: "opacity-25", cx: "12", cy: "12", r: "10", stroke: "currentColor", strokeWidth: "4" }),
+    h("path", { className: "opacity-75", fill: "currentColor", d: "M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" })
+  );
+};
+
+/**
+ * The header component for the application.
+ * Displays the application title and tagline.
+ */
+const Header = () => {
+  return h("header", { className: "bg-gray-800/50 backdrop-blur-sm shadow-lg sticky top-0 z-10" },
+    h("div", { className: "container mx-auto px-4 md:px-8 py-6 text-center" },
+      h("h1", { className: "text-4xl md:text-5xl font-extrabold text-amber-400" }, "Fridge Feast"),
+      h("p", { className: "text-gray-400 mt-2 text-lg" }, "Turn your leftovers into delicious masterpieces!")
+    )
+  );
+};
+
+/**
+ * Renders the main input area for users to add ingredients.
+ * Manages its own state for the ingredient list and input field.
+ * @param {object} props - The component's props.
+ * @param {Function} props.onGetRecipes - Callback to trigger recipe search in the parent component.
+ * @param {boolean} props.isLoading - Flag from parent to disable controls while recipes are being fetched.
+ */
+const IngredientInput = ({ onGetRecipes, isLoading }) => {
+  // State for the current list of ingredients.
+  const [ingredients, setIngredients] = useState([]);
+  // State for the text in the input field.
+  const [currentIngredient, setCurrentIngredient] = useState('');
+  // State for the "Surprise Me" button loading state.
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  // Adds the ingredient(s) from the input field to the list.
+  // Supports comma-separated entries.
+  const handleAddIngredient = () => {
+    const newIngredients = currentIngredient
+      .split(',')
+      .map(ing => ing.trim().toLowerCase())
+      .filter(ing => ing && !ingredients.includes(ing)); // Filter empty and duplicate ingredients
+
+    if (newIngredients.length > 0) {
+      setIngredients([...ingredients, ...newIngredients]);
+      setCurrentIngredient(''); // Clear the input field
+    }
+  };
+  
+  // Fetches random ingredients from the API.
+  const handleSurpriseMe = async () => {
+    setIsGenerating(true);
+    try {
+      const randomIngredients = await getRandomIngredients();
+      setIngredients(randomIngredients);
+      setCurrentIngredient('');
+    } catch (error) {
+      alert("Sorry, couldn't generate random ingredients right now. Please try again.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Removes a specific ingredient from the list.
+  const handleRemoveIngredient = (ingredientToRemove) => {
+    setIngredients(ingredients.filter(ing => ing !== ingredientToRemove));
+  };
+  
+  // Allows adding ingredients by pressing the Enter key.
+  const handleKeyDown = (event) => {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        handleAddIngredient();
+    }
+  };
+
+  return h("div", { className: "bg-gray-800/70 backdrop-blur-md p-6 md:p-8 rounded-xl shadow-lg max-w-3xl mx-auto border border-gray-700" },
+    h("h2", { className: "text-2xl font-bold text-gray-100 mb-4" }, "What's in your fridge?"),
+    h("div", { className: "flex flex-col sm:flex-row gap-3" },
+      h("input", {
+        type: "text",
+        value: currentIngredient,
+        onChange: (e) => setCurrentIngredient(e.target.value),
+        onKeyDown: handleKeyDown,
+        placeholder: "e.g., Chicken, tomatoes, cheese",
+        className: "flex-grow p-3 border border-gray-600 bg-gray-700 text-gray-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none transition-all",
+        disabled: isLoading || isGenerating
+      }),
+       h("button", {
+        onClick: handleAddIngredient,
+        className: "px-6 py-3 bg-amber-500 text-gray-900 font-semibold rounded-lg hover:bg-amber-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-amber-500 transition-all disabled:bg-gray-500 disabled:cursor-not-allowed",
+        disabled: isLoading || isGenerating || !currentIngredient.trim()
+      }, "Add"),
+      h("button", {
+        onClick: handleSurpriseMe,
+        className: "px-6 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-purple-500 transition-all disabled:bg-gray-500 disabled:cursor-not-allowed",
+        disabled: isLoading || isGenerating
+      }, isGenerating ? "Generating..." : "Surprise Me!")
+    ),
+    h("div", { className: "mt-4 flex flex-wrap gap-2 min-h-[40px] p-2 bg-gray-900/50 rounded-lg border border-gray-700" },
+      ingredients.length === 0 && h("span", {className: "text-gray-500 text-sm italic p-1"}, "Your ingredients will appear here..."),
+      ...ingredients.map(ing => h("span", { key: ing, className: "fade-in flex items-center bg-gray-700 text-gray-200 px-3 py-1 rounded-full text-sm font-medium capitalize" },
+        ing,
+        h("button", { onClick: () => handleRemoveIngredient(ing), className: "ml-2 text-gray-400 hover:text-white focus:outline-none focus:text-white", "aria-label": `Remove ${ing}` }, "x")
+      ))
+    ),
+    h("div", { className: "mt-6" },
+      h("button", {
+        onClick: () => onGetRecipes(ingredients),
+        className: "w-full px-8 py-4 bg-green-600 text-white font-bold text-lg rounded-lg hover:bg-green-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-green-500 transition-all transform hover:scale-105 disabled:bg-gray-500 disabled:cursor-not-allowed disabled:transform-none",
+        disabled: isLoading || ingredients.length === 0
+      }, "Find Recipes!")
+    )
+  );
+};
+
+/**
+ * A single recipe card component.
+ * @param {object} props - Component props.
+ * @param {object} props.recipe - The recipe data object from the API.
+ * @param {number} props.index - The index of the card, used for staggered animation delay.
+ * @param {Function} props.onGetPrepTips - Callback to get prep tips for this recipe.
+ * @param {Function} props.onImagineDish - Callback to generate an image for this recipe.
+ */
+const RecipeCard = ({ recipe, index, onGetPrepTips, onImagineDish }) => {
+    return h("div", {
+        className: "bg-gray-800/70 backdrop-blur-md rounded-xl shadow-lg transition-all duration-300 hover:shadow-amber-500/20 hover:scale-[1.03] border border-gray-700 recipe-card-enter p-6",
+        style: { animationDelay: `${index * 150}ms` } // Staggered animation entrance.
+    },
+        h("h3", { className: "text-2xl font-bold text-amber-400" }, recipe.name),
+        h("p", { className: "text-gray-400 mt-2" }, recipe.description),
+        h("div", { className: "mt-6" },
+            h("h4", { className: "text-lg font-semibold text-gray-200" }, "Ingredients"),
+            h("ul", { className: "list-disc list-inside mt-2 text-gray-300 space-y-1" },
+                ...recipe.ingredients.map(ing => h("li", { key: ing }, ing))
+            )
+        ),
+        h("div", { className: "mt-6" },
+            h("h4", { className: "text-lg font-semibold text-gray-200" }, "Instructions"),
+            h("ol", { className: "list-decimal list-inside mt-2 text-gray-300 space-y-2" },
+                ...recipe.instructions.map(step => h("li", { key: step }, step))
+            )
+        ),
+        h("div", { className: "mt-6 pt-6 border-t border-gray-700" },
+            h("h4", { className: "text-lg font-semibold text-gray-200 mb-4" }, "AI Helpers"),
+            h("div", { className: "flex flex-col sm:flex-row gap-3" },
+                h("button", {
+                    onClick: onGetPrepTips,
+                    className: "flex-1 px-4 py-2 bg-sky-600 text-white text-sm font-semibold rounded-lg hover:bg-sky-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-sky-500 transition-all transform hover:scale-105"
+                }, "Prep Tips"),
+                h("button", {
+                    onClick: onImagineDish,
+                    className: "flex-1 px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-indigo-500 transition-all transform hover:scale-105"
+                }, "Imagine your dish")
+            )
+        )
+    );
+};
+
+/**
+ * A placeholder component for the initial view before any search, guiding the user.
+ */
+const WelcomeState = () => {
+    return h("div", { className: "text-center mt-16 p-8 bg-gray-800/50 rounded-xl max-w-2xl mx-auto fade-in" },
+        h("h2", { className: "text-3xl font-bold text-amber-400" }, "Welcome to Fridge Feast!"),
+        h("p", { className: "text-gray-400 mt-4 text-lg" }, "Ready to cook something amazing?"),
+        h("p", { className: "text-gray-400 mt-2" }, "Add the ingredients you have on hand, and our AI chef will whip up some delicious recipe ideas for you."),
+    );
+};
+
+/**
+ * Main application component. This is the root of the React app.
+ * It manages the primary application state like recipes, loading status, and API key.
+ */
+const App = () => {
+  // State for the list of fetched recipes.
+  const [recipes, setRecipes] = useState([]);
+  // Global loading state for the main "Find Recipes" action.
+  const [isLoading, setIsLoading] = useState(false);
+  // State to hold any potential error messages.
+  const [error, setError] = useState(null);
+  // State for the user's API key, initialized from localStorage.
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini-api-key') || '');
+  // State for the content of the informational modal.
+  const [modalContent, setModalContent] = useState(null);
+  // Loading state specifically for the modal's content.
+  const [isModalLoading, setIsModalLoading] = useState(false);
+  // Error state specifically for the modal's content.
+  const [modalError, setModalError] = useState(null);
+
+
+  // Effect hook to initialize the Gemini AI client whenever the API key changes.
+  useEffect(() => {
+    if (apiKey) {
+      try {
+        ai = new GoogleGenAI({ apiKey });
+      } catch (err) {
+        console.error("Error initializing GoogleGenAI:", err);
+        alert("There was an issue with your API Key. It might be invalid. Please reset and enter a valid key.");
+        handleResetKey(); // Reset if initialization fails.
+      }
+    }
+  }, [apiKey]);
+  
+  // Saves the API key to both state and localStorage.
+  const handleSaveKey = (key) => {
+      localStorage.setItem('gemini-api-key', key);
+      setApiKey(key);
+  };
+
+  // Clears the API key from localStorage and state, forcing a page reload to show the modal.
+  const handleResetKey = () => {
+      localStorage.removeItem('gemini-api-key');
+      setApiKey('');
+      window.location.reload();
+  };
+
+  // The main function to fetch recipes, passed down to the IngredientInput component.
+  const handleGetRecipes = async (ingredients) => {
+    setIsLoading(true);
+    setError(null);
+    setRecipes([]);
+    try {
+      const newRecipes = await getRecipesFromIngredients(ingredients);
+      setRecipes(newRecipes);
+    } catch (err) {
+      setError("Oops! We couldn't fetch recipes. The AI chef might be busy, or your API key may be invalid. Please try again or reset your key.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handlers for the AI features modal.
+  const handleCloseModal = () => {
+    setModalContent(null);
+    setModalError(null);
+  };
+
+  const handleGetPrepTipsForRecipe = async (recipe) => {
+    setModalContent({ title: `Prep Tips for ${recipe.name}`, content: "" });
+    setIsModalLoading(true);
+    setModalError(null);
+    try {
+      const tips = await getPrepTips(recipe);
+      setModalContent(prev => ({ ...prev, content: tips }));
+    } catch (err) {
+      setModalError("Sorry, I couldn't get any prep tips at the moment. Please try again.");
+    } finally {
+      setIsModalLoading(false);
+    }
+  };
+
+  const handleImagineDishForRecipe = async (recipe) => {
+    setModalContent({ title: `Imagining: ${recipe.name}`, content: null, imageUrl: null });
+    setIsModalLoading(true);
+    setModalError(null);
+    try {
+        const imageUrl = await generateDishImage(recipe);
+        setModalContent(prev => ({ ...prev, imageUrl }));
+    } catch (err) {
+        setModalError("Sorry, we couldn't fetch an image for your dish at the moment. Please try again.");
+    } finally {
+        setIsModalLoading(false);
+    }
+  };
+
+  // Conditional Rendering: If there's no API key, show the modal. Otherwise, show the main app.
+  if (!apiKey) {
+      return h(ApiKeyModal, { onSave: handleSaveKey });
+  }
+  
+  // The main UI of the application.
+  return h("div", { className: "min-h-screen text-white font-sans" },
+    h(Header),
+    h("main", { className: "container mx-auto p-4 md:p-8" },
+      h(IngredientInput, { onGetRecipes: handleGetRecipes, isLoading }),
+      
+      // Show loader when fetching recipes.
+      isLoading && h("div", { className: "flex flex-col items-center justify-center mt-12", "aria-live": "polite" },
+        h(Loader),
+        h("p", { className: "mt-4 text-gray-400" }, "The AI chef is thinking...")
+      ),
+      
+      // Show error message if something went wrong.
+      error && h("div", { className: "mt-12 text-center bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded-lg max-w-md mx-auto", role: "alert" },
+        h("strong", { className: "font-bold" }, "An error occurred: "),
+        h("span", { className: "block sm:inline" }, error)
+      ),
+
+      // Show the welcome message on initial load.
+      !isLoading && !error && recipes.length === 0 && h(WelcomeState),
+      
+      // Display the generated recipe cards.
+      recipes.length > 0 && h("div", { className: "mt-12" },
+        h("h2", { className: "text-3xl font-bold text-center text-gray-100 mb-8" }, "Your Culinary Creations"),
+        h("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-8" },
+          ...recipes.map((recipe, index) => h(RecipeCard, { 
+              key: recipe.name,
+              recipe,
+              index,
+              onGetPrepTips: () => handleGetPrepTipsForRecipe(recipe),
+              onImagineDish: () => handleImagineDishForRecipe(recipe),
+            }))
+        )
+      )
+    ),
+    h("footer", {className: "text-center py-8 text-gray-500 text-sm"},
+      h("p", null, "Powered by Google Gemini. Created with passion."),
+      h("p", { className: "mt-1" }, "Fridge Feast (c) 2025"),
+      h("button", { 
+          onClick: handleResetKey, 
+          className: "mt-4 text-xs text-gray-600 hover:text-amber-500 underline focus:outline-none focus:ring-2 focus:ring-amber-500 rounded" 
+      }, "Reset API Key")
+    ),
+    // Render the modal if its content is set
+    modalContent && h(Modal, {
+        title: modalContent.title,
+        content: modalContent.content,
+        imageUrl: modalContent.imageUrl,
+        isLoading: isModalLoading,
+        error: modalError,
+        onClose: handleCloseModal
+    })
+  );
+};
+
+// --- APP RENDERING ---
+
+// Get the root DOM node.
+const rootElement = document.getElementById('root');
+// Create a React root.
+const root = ReactDOM.createRoot(rootElement);
+// Render the App component into the root. StrictMode is used to highlight potential problems.
+root.render(h(React.StrictMode, null, h(App)));
+
+    </script>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>

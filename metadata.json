@@ -1,0 +1,5 @@
+{
+  "name": "Fridge Feast",
+  "description": "An AI-powered chef that suggests nutritious and delicious meals based on your leftover ingredients. Get recipes, prep tips, and shopping lists all in one place.",
+  "requestFramePermissions": []
+}
